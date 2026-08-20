@@ -1,0 +1,42 @@
+{
+  "entities": {
+    "Classes": {
+      "description": "Class configuration including student roster and class name",
+      "properties": {
+        "className": { "type": "string", "description": "Name of the class" },
+        "students": { "type": "array", "description": "Student roster list" },
+        "updatedAt": { "type": "string", "description": "ISO timestamp" }
+      },
+      "required": ["className", "students"]
+    },
+    "InspectionRecords": {
+      "description": "Daily inspection check-in records and unsubmitted tracking",
+      "properties": {
+        "id": { "type": "string", "description": "Record ID" },
+        "date": { "type": "string", "description": "Date YYYY-MM-DD" },
+        "slotId": { "type": "string", "description": "Time slot ID" },
+        "slotLabel": { "type": "string", "description": "Time slot label" },
+        "inspectedAt": { "type": "string", "description": "Inspection timestamp" },
+        "totalStudents": { "type": "number", "description": "Total count of students" },
+        "submittedCount": { "type": "number", "description": "Submitted count" },
+        "unsubmittedCount": { "type": "number", "description": "Unsubmitted count" },
+        "unsubmittedStudentIds": { "type": "array", "description": "Array of student IDs" },
+        "unsubmittedStudentCodes": { "type": "array", "description": "Array of phone slot codes" },
+        "unsubmittedStudentNames": { "type": "array", "description": "Array of student names" },
+        "noticeText": { "type": "string", "description": "Official notice generated" },
+        "customNote": { "type": "string", "description": "Optional notes" }
+      },
+      "required": ["id", "date", "slotId", "totalStudents", "unsubmittedCount"]
+    }
+  },
+  "firestore": {
+    "classes/{classId}": {
+      "entity": "Classes",
+      "description": "Class documents containing configuration and student rosters"
+    },
+    "classes/{classId}/inspections/{inspectionId}": {
+      "entity": "InspectionRecords",
+      "description": "Time-slot inspection records for a class"
+    }
+  }
+}

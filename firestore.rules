@@ -1,0 +1,18 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper function
+    function isValidClassId(classId) {
+      return classId is string && classId.size() > 0 && classId.size() < 128;
+    }
+
+    // Allow read and write to class and inspection data
+    match /classes/{classId} {
+      allow read, write: if isValidClassId(classId);
+
+      match /inspections/{inspectionId} {
+        allow read, write: if isValidClassId(classId);
+      }
+    }
+  }
+}
