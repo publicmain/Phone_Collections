@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 import { db, IS_FIREBASE_ENABLED } from '../lib/firebase';
 import { InspectionRecord, Student, NoticeConfig } from '../types';
+import { deriveClassDocId } from '../config/access';
 import {
   loadStoredStudents,
   saveStoredStudents,
@@ -25,8 +26,62 @@ import {
   saveStoredNoticeConfig,
 } from './storage';
 
-// Default document ID for class metadata
-export const DEFAULT_CLASS_DOC_ID = 'main_class';
+// 早期版本把班级数据固定存在 classes/main_class，路径可被任何人猜到。
+// 现在文档 ID 由访问口令派生：不知道口令就推不出数据路径。
+export const LEGACY_CLASS_DOC_ID = 'main_class';
+
+let activeClassDocId = LEGACY_CLASS_DOC_ID;
+let initialized = false;
+
+/** 当前班级文档 ID。必须在 initClassDocId() 之后调用。 */
+export function getClassDocId(): string {
+  return activeClassDocId;
+}
+
+/**
+ * 用访问口令初始化云端数据路径，并在首次使用时把旧的
+ * classes/main_class 数据（含 inspections 子集合）迁移过来。
+ * 幂等：重复调用只会执行一次。
+ */
+export async function initClassDocId(passcode: string): Promise<string> {
+  activeClassDocId = await deriveClassDocId(passcode);
+
+  if (!IS_FIREBASE_ENABLED || !db || initialized) return activeClassDocId;
+  initialized = true;
+
+  try {
+    const targetRef = doc(db, 'classes', activeClassDocId);
+    const targetSnap = await getDoc(targetRef);
+    if (targetSnap.exists()) return activeClassDocId;
+
+    const legacyRef = doc(db, 'classes', LEGACY_CLASS_DOC_ID);
+    const legacySnap = await getDoc(legacyRef);
+    if (!legacySnap.exists()) return activeClassDocId;
+
+    // 搬运班级文档本体
+    await setDoc(targetRef, legacySnap.data());
+
+    // 搬运点验记录子集合
+    const legacyRecords = await getDocs(
+      collection(db, 'classes', LEGACY_CLASS_DOC_ID, 'inspections')
+    );
+    const docs = legacyRecords.docs;
+    const chunkSize = 400;
+    for (let i = 0; i < docs.length; i += chunkSize) {
+      const batch = writeBatch(db);
+      docs.slice(i, i + chunkSize).forEach((d) => {
+        batch.set(doc(db, 'classes', activeClassDocId, 'inspections', d.id), d.data());
+      });
+      await batch.commit();
+    }
+
+    console.info(`已迁移 ${docs.length} 条点验记录到新的云端路径。`);
+  } catch (e) {
+    console.warn('云端数据迁移失败，将以本地数据继续：', e);
+  }
+
+  return activeClassDocId;
+}
 
 /**
  * Sync status state type
@@ -43,7 +98,7 @@ export function subscribeToClassData(
   if (!IS_FIREBASE_ENABLED || !db) return null;
 
   try {
-    const classDocRef = doc(db, 'classes', DEFAULT_CLASS_DOC_ID);
+    const classDocRef = doc(db, 'classes', getClassDocId());
     return onSnapshot(
       classDocRef,
       (snapshot) => {
@@ -105,7 +160,7 @@ export function subscribeToInspectionRecords(
   if (!IS_FIREBASE_ENABLED || !db) return null;
 
   try {
-    const inspectionsColl = collection(db, 'classes', DEFAULT_CLASS_DOC_ID, 'inspections');
+    const inspectionsColl = collection(db, 'classes', getClassDocId(), 'inspections');
     const q = query(inspectionsColl, orderBy('date', 'desc'));
 
     return onSnapshot(
@@ -141,7 +196,7 @@ export async function saveRecordToCloud(record: InspectionRecord): Promise<boole
   if (!IS_FIREBASE_ENABLED || !db) return false;
 
   try {
-    const recordDocRef = doc(db, 'classes', DEFAULT_CLASS_DOC_ID, 'inspections', record.id);
+    const recordDocRef = doc(db, 'classes', getClassDocId(), 'inspections', record.id);
     await setDoc(recordDocRef, record, { merge: true });
     return true;
   } catch (e) {
@@ -157,7 +212,7 @@ export async function deleteRecordFromCloud(recordId: string): Promise<boolean> 
   if (!IS_FIREBASE_ENABLED || !db) return false;
 
   try {
-    const recordDocRef = doc(db, 'classes', DEFAULT_CLASS_DOC_ID, 'inspections', recordId);
+    const recordDocRef = doc(db, 'classes', getClassDocId(), 'inspections', recordId);
     await deleteDoc(recordDocRef);
     return true;
   } catch (e) {
@@ -173,7 +228,7 @@ export async function clearAllCloudRecords(): Promise<boolean> {
   if (!IS_FIREBASE_ENABLED || !db) return false;
 
   try {
-    const inspectionsColl = collection(db, 'classes', DEFAULT_CLASS_DOC_ID, 'inspections');
+    const inspectionsColl = collection(db, 'classes', getClassDocId(), 'inspections');
     const snapshot = await getDocs(inspectionsColl);
     if (snapshot.empty) return true;
 
@@ -205,7 +260,7 @@ export async function syncClassDataToCloud(
   if (!IS_FIREBASE_ENABLED || !db) return false;
 
   try {
-    const classDocRef = doc(db, 'classes', DEFAULT_CLASS_DOC_ID);
+    const classDocRef = doc(db, 'classes', getClassDocId());
     const payload: any = {
       className,
       students,
@@ -229,7 +284,7 @@ export async function syncNoticeConfigToCloud(noticeConfig: NoticeConfig): Promi
   if (!IS_FIREBASE_ENABLED || !db) return false;
 
   try {
-    const classDocRef = doc(db, 'classes', DEFAULT_CLASS_DOC_ID);
+    const classDocRef = doc(db, 'classes', getClassDocId());
     await setDoc(
       classDocRef,
       {
@@ -262,7 +317,7 @@ export async function batchSyncRecordsToCloud(records: InspectionRecord[]): Prom
     for (const chunk of chunks) {
       const batch = writeBatch(db);
       chunk.forEach((rec) => {
-        const rRef = doc(db, 'classes', DEFAULT_CLASS_DOC_ID, 'inspections', rec.id);
+        const rRef = doc(db, 'classes', getClassDocId(), 'inspections', rec.id);
         batch.set(rRef, rec);
       });
       await batch.commit();
