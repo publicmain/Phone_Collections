@@ -54,6 +54,7 @@ const glass = (a: number): React.CSSProperties => ({
 });
 const PER_LAYER = 9;               // 每层固定 9 个槽位，对应实体柜
 const MOBILE = 700;                // 断点
+const MIN_TARGET = 44;             // 最小触控目标（iOS HIG 44pt）
 const SLOTS = [
   { id: 'morning', name: '早自习', time: '08:55' },
   { id: 'noon', name: '午间', time: '12:40' },
@@ -149,9 +150,16 @@ export const PhoneInspectionApp: React.FC<Props> = ({
   }, [students, total]);
 
   const gap = mob ? (narrow ? 5 : 6) : 11;
-  const cellW = mob
-    ? Math.floor((Math.min(vw, MOBILE) - 32 - 12 - gap * (PER_LAYER - 1)) / PER_LAYER)
-    : 92;
+
+  // 一层 9 格铺在手机上只有 32px 宽，低于 44px 的最小触控目标，必然误点。
+  // 因此手机上把一层折成两行显示（1–5 / 6–9），层的分组与编号不变。
+  const widthAt = (cols: number) =>
+    Math.floor((Math.min(vw, MOBILE) - 32 - 12 - gap * (cols - 1)) / cols);
+
+  let cols = PER_LAYER;
+  if (mob) while (cols > 3 && widthAt(cols) < MIN_TARGET) cols = Math.ceil(cols / 2);
+
+  const cellW = mob ? widthAt(cols) : 92;
   const vertical = cellW < 54;                       // 窄屏中文姓名竖排
   const cellPad = mob ? (narrow ? '10px 2px' : '11px 3px') : '15px 8px';
   const cellMinH = mob ? (vertical ? 86 : 66) : 74;
@@ -297,7 +305,7 @@ export const PhoneInspectionApp: React.FC<Props> = ({
                       <span style={{ padding: '0 4px', fontSize: 'clamp(11px,3vw,13px)', fontWeight: 500, color: 'rgba(60,60,67,0.45)' }}>
                         第 {li + 1} 层 · 槽位 {li * PER_LAYER + 1} – {(li + 1) * PER_LAYER}
                       </span>
-                      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${PER_LAYER},minmax(0,1fr))`, gap }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols},minmax(0,1fr))`, gap }}>
                         {layer.map((s, ci) => {
                           const idx = li * PER_LAYER + ci;
                           const delay = `${(0.06 + idx * 0.003).toFixed(3)}s`;
