@@ -300,10 +300,10 @@ export const PhoneInspectionApp: React.FC<Props> = ({
                       <div style={{ display: 'grid', gridTemplateColumns: `repeat(${PER_LAYER},minmax(0,1fr))`, gap }}>
                         {layer.map((s, ci) => {
                           const idx = li * PER_LAYER + ci;
-                          const delay = `${(0.18 + idx * 0.01).toFixed(3)}s`;
+                          const delay = `${(0.06 + idx * 0.003).toFixed(3)}s`;
                           if (!s)
                             return (
-                              <div key={ci} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, padding: cellPad, minHeight: cellMinH, border: '1px dashed rgba(60,60,67,0.16)', borderRadius: cellRadius, color: 'rgba(60,60,67,0.3)', animation: `pcFade .5s ease both`, animationDelay: delay }}>
+                              <div key={ci} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, padding: cellPad, minHeight: cellMinH, border: '1px dashed rgba(60,60,67,0.16)', borderRadius: cellRadius, color: 'rgba(60,60,67,0.3)', animation: `pcFade .34s ease both`, animationDelay: delay }}>
                                 <span style={{ fontSize: mob ? 10 : 11, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: 'rgba(60,60,67,0.26)' }}>{String(idx + 1).padStart(2, '0')}</span>
                                 <span style={{ fontSize: mob ? 11 : 12 }}>空位</span>
                               </div>
@@ -311,8 +311,8 @@ export const PhoneInspectionApp: React.FC<Props> = ({
                           const bad = unsubmitted.includes(s.id);
                           const latin = /^[\x00-\x7F]+$/.test(s.name);
                           return (
-                            <button key={s.id} onClick={() => toggle(s.id)} aria-label={`${s.code}号 ${s.name}${bad ? '，未存' : '，已存'}`}
-                              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, padding: cellPad, minHeight: cellMinH, border: 'none', borderRadius: cellRadius, cursor: 'pointer', textAlign: 'center', background: bad ? T.red : 'rgba(255,255,255,0.62)', color: bad ? '#fff' : T.ink, backdropFilter: 'blur(22px) saturate(180%)', WebkitBackdropFilter: 'blur(22px) saturate(180%)', boxShadow: bad ? '0 10px 26px rgba(255,59,48,0.32)' : '0 1px 0 rgba(255,255,255,0.7) inset, 0 6px 20px rgba(0,0,0,0.05)', transition: `transform .22s ${T.ease}, background .25s, box-shadow .25s`, animation: `pcRise .5s ${T.ease} both`, animationDelay: delay }}>
+                            <button key={s.id} className="pc-cell" onClick={() => toggle(s.id)} aria-pressed={bad} aria-label={`${s.code}号 ${s.name}${bad ? '，未存' : '，已存'}`}
+                              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, padding: cellPad, minHeight: cellMinH, border: 'none', borderRadius: cellRadius, cursor: 'pointer', textAlign: 'center', background: bad ? T.red : '#FFFFFF', color: bad ? '#fff' : T.ink, boxShadow: bad ? '0 10px 26px rgba(255,59,48,0.32)' : '0 1px 0 rgba(255,255,255,0.7) inset, 0 6px 20px rgba(0,0,0,0.05)', animation: `pcRise .34s ${T.ease} both`, animationDelay: delay }}>
                               <span style={{ fontSize: mob ? 10 : 11, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: bad ? 'rgba(255,255,255,0.75)' : T.ink4 }}>{s.code}</span>
                               <span style={vertical && !latin
                                 ? { fontSize: 13, fontWeight: 500, lineHeight: 1.1, letterSpacing: '0.5px', writingMode: 'vertical-rl', textOrientation: 'upright', maxHeight: 58, overflow: 'hidden' } as React.CSSProperties

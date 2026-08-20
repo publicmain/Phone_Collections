@@ -1,3 +1,42 @@
 html,body{margin:0;padding:0;background:#F2F2F5;-webkit-font-smoothing:antialiased}
 *{box-sizing:border-box}
 button:focus-visible,input:focus-visible,textarea:focus-visible{outline:none;box-shadow:0 0 0 4px rgba(0,113,227,.28)}
+
+/* ---- 触摸响应 ----------------------------------------------------------
+   点验时手指是连续快点的，默认行为会把这些点击吃掉：
+   - touch-action:auto  → iOS 保留双击缩放，每次 tap 要等约 300ms 判定
+   - user-select:auto   → 连点文字触发选词，弹出放大镜/选择手柄
+   - 默认 tap 高亮      → 先闪系统灰蓝块，再等 React 渲染，像是没反应
+------------------------------------------------------------------------ */
+html{
+  -webkit-text-size-adjust:100%;
+}
+body{
+  touch-action:manipulation;          /* 去掉双击缩放判定，tap 立即生效 */
+  -webkit-tap-highlight-color:transparent;
+}
+button{
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
+  -webkit-user-select:none;
+  user-select:none;
+}
+
+/* 点验格子 */
+.pc-cell{
+  /* 按下立刻缩小，不等 React 重渲染 —— 手指抬起前就知道点中了 */
+  transition:transform .1s cubic-bezier(.2,.8,.2,1),background .2s,box-shadow .2s;
+  -webkit-touch-callout:none;         /* 长按不弹系统菜单 */
+}
+.pc-cell:active{
+  transform:scale(.9);
+  transition-duration:.04s;
+}
+/* 编号和姓名不参与命中测试，点击永远落在按钮本身 */
+.pc-cell>*{
+  pointer-events:none;
+}
+
+@media (prefers-reduced-motion:reduce){
+  .pc-cell,.pc-cell:active{transition:none;transform:none}
+}
