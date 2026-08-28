@@ -18,9 +18,10 @@ export interface Student {
 
 export interface InspectionRecordLite {
   date: string;
-  slot: string;
-  /** 实际点验时刻 HH:MM。历史记录可能没有，渲染时需判空。 */
-  time?: string;
+  /** 点验时刻 HH:MM，取自当时的真实时钟。 */
+  time: string;
+  /** 旧版按「早自习/午间/晚自习」分组时留下的时段名，仅用于渲染历史记录。 */
+  slot?: string;
   misses: number[];
 }
 
@@ -57,14 +58,7 @@ const glass = (a: number): React.CSSProperties => ({
 const PER_LAYER = 9;               // 每层固定 9 个槽位，对应实体柜
 const MOBILE = 700;                // 断点
 const MIN_TARGET = 44;             // 最小触控目标（iOS HIG 44pt）
-// 时段只用来分组统计，不再携带写死的名义时刻。
-// 记录与通报里的时间一律取点验当下的真实时钟。
-const SLOTS: { id: string; name: string; from?: number; to?: number }[] = [
-  { id: 'morning', name: '早自习', from: 5 * 60, to: 11 * 60 },
-  { id: 'noon', name: '午间', from: 11 * 60, to: 15 * 60 },
-  { id: 'evening', name: '晚自习', from: 15 * 60, to: 23 * 60 },
-  { id: 'custom', name: '临时' },   // 落在以上窗口之外，或手动指定
-];
+const RESUME_WINDOW_MIN = 120;     // 超过这么久没动，再打开就当新一轮点验
 const TEMPLATES = [
   { key: 'standard', label: '规范公文' },
   { key: 'simple', label: '简明通报' },
@@ -92,10 +86,6 @@ const hhmm = (d: Date) =>
   `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 const minutesOf = (d: Date) => d.getHours() * 60 + d.getMinutes();
 
-/** 按当前时刻落在哪个时间窗来判定时段；都不落则为「临时」。 */
-const autoSlot = (mins: number = minutesOf(new Date())) =>
-  SLOTS.find(s => s.from !== undefined && s.to !== undefined && mins >= s.from && mins < s.to)?.id ??
-  'custom';
 
 export const PhoneInspectionApp: React.FC<Props> = ({
   students,
@@ -105,7 +95,6 @@ export const PhoneInspectionApp: React.FC<Props> = ({
 }) => {
   const [view, setView] = useState<'inspection' | 'stats'>('inspection');
   const [date, setDate] = useState(todayISO());
-  const [slotId, setSlotId] = useState(autoSlot());
   const [unsubmitted, setUnsubmitted] = useState<number[]>([]);
   const [template, setTemplate] = useState('standard');
   const [edited, setEdited] = useState<string | null>(null);
@@ -114,8 +103,6 @@ export const PhoneInspectionApp: React.FC<Props> = ({
   const [localRecords, setLocalRecords] = useState<InspectionRecordLite[]>([]);
   const [vw, setVw] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
   const [now, setNow] = useState(() => new Date());
-  /** 老师手动点过时段后，就不再让时钟自动切换，免得点验中途被顶掉。 */
-  const [slotPinned, setSlotPinned] = useState(false);
 
   useEffect(() => {
     const tick = setInterval(() => setNow(new Date()), 10_000);
@@ -130,11 +117,13 @@ export const PhoneInspectionApp: React.FC<Props> = ({
       if (raw) {
         const d = JSON.parse(raw);
         setLocalRecords(Array.isArray(d.records) ? d.records : []);
-        // 同一天且仍处在同一时段，才接着上次没点完的进度；
-        // 跨了时段（例如中午存的进度、晚上再打开）应当从空白重新点验。
-        if (d.date === todayISO() && d.slotId && d.slotId === autoSlot()) {
+        // 同一天、且距上次操作不超过 RESUME_WINDOW_MIN 分钟，才接着上次
+        // 没点完的进度；隔得久了（中午存的进度晚上再打开）视为新一轮，
+        // 从空白重新点验，避免把上一轮的未存名单带进这一轮的通报。
+        const savedAt = d.savedAt ? new Date(d.savedAt).getTime() : 0;
+        const freshEnough = savedAt > 0 && Date.now() - savedAt < RESUME_WINDOW_MIN * 60_000;
+        if (d.date === todayISO() && freshEnough) {
           setUnsubmitted(d.unsubmitted || []);
-          setSlotId(d.slotId);
         }
         if (d.template) setTemplate(d.template);
       }
@@ -146,27 +135,19 @@ export const PhoneInspectionApp: React.FC<Props> = ({
     try {
       localStorage.setItem(
         STORE_KEY,
-        JSON.stringify({ records: localRecords, unsubmitted, template, date, slotId })
+        JSON.stringify({ records: localRecords, unsubmitted, template, date, savedAt: new Date().toISOString() })
       );
     } catch {}
-  }, [localRecords, unsubmitted, template, date, slotId]);
+  }, [localRecords, unsubmitted, template, date]);
 
   const nowMin = minutesOf(now);
   const isToday = date === isoOf(now);
   /** 通报与归档使用的真实时刻；补录往日记录时不写时间，免得记成假的。 */
   const captureTime = isToday ? hhmm(now) : '';
 
-  // 时钟越过时段边界时自动切换，除非老师已手动指定
-  useEffect(() => {
-    if (slotPinned) return;
-    const auto = autoSlot(nowMin);
-    setSlotId(prev => (prev === auto ? prev : auto));
-  }, [nowMin, slotPinned]);
-
   const records = cloudRecords && cloudRecords.length ? cloudRecords : localRecords;
   const mob = vw < MOBILE;
   const narrow = vw < 420;
-  const slot = SLOTS.find(s => s.id === slotId) || SLOTS[0];
   const total = students.length;
   const list = students.filter(s => unsubmitted.includes(s.id));
   const sub = total - list.length;
@@ -206,22 +187,22 @@ export const PhoneInspectionApp: React.FC<Props> = ({
     if (edited !== null) return edited;
     const names = list.map(s => `${s.code}号 ${s.name}`);
     const rate = ((sub / (total || 1)) * 100).toFixed(1);
-    const label = captureTime ? `${slot.name} ${captureTime}` : slot.name;
+    const label = captureTime;   // 只用真实时刻，不再有时段名
     const sign = `${className} 班级管理组`;
-    if (template === 'raw') return names.join('\n') || '（本时段无未存学生）';
+    if (template === 'raw') return names.join('\n') || '（本次无未存学生）';
     if (template === 'compact')
       return list.length === 0
-        ? `[${date} ${label}] ${className}手机存放点验：应存${total}人，全员已交齐。(${sign})`
-        : `[${date} ${label}] ${className}手机存放点验：应存${total}人，实存${sub}人，未存${list.length}人（${names.join('、')}）。(${sign})`;
+        ? `[${date}${label ? ' ' + label : ''}] ${className}手机存放点验：应存${total}人，全员已交齐。(${sign})`
+        : `[${date}${label ? ' ' + label : ''}] ${className}手机存放点验：应存${total}人，实存${sub}人，未存${list.length}人（${names.join('、')}）。(${sign})`;
     if (template === 'simple')
-      return `【${className} 手机存放点验通报】\n日期时段：${date} ${label}\n应存：${total}人 | 实存：${sub}人 | 未存：${list.length}人${
+      return `【${className} 手机存放点验通报】\n点验时间：${date}${label ? ' ' + label : ''}\n应存：${total}人 | 实存：${sub}人 | 未存：${list.length}人${
         list.length === 0 ? '\n核查结论：全员已按规定完成手机定点存放。' : `\n未存名单：${names.join('、')}`
       }\n落款：${sign}`;
-    const head = `【检查日期】：${date}\n【核查时段】：${label}\n【未存人数】：${list.length} 人\n\n`;
+    const head = `【检查日期】：${date}\n【点验时刻】：${label || '—'}\n【未存人数】：${list.length} 人\n\n`;
     return list.length === 0
       ? `${head}全员已按规定完成手机定点存放。`
       : `${head}未按规定存放学生名单（共 ${list.length} 人）\n${names.join('、')}\n请上述同学下课后立即把手机存入指定箱位。`;
-  }, [edited, list, sub, total, slot, className, date, template, captureTime]);
+  }, [edited, list, sub, total, className, date, template, captureTime]);
 
   const copy = () => {
     navigator.clipboard?.writeText(notice).catch(() => {});
@@ -229,7 +210,7 @@ export const PhoneInspectionApp: React.FC<Props> = ({
     setTimeout(() => setCopied(false), 1800);
   };
   const archive = () => {
-    const rec = { date, slot: slot.name, time: captureTime, misses: [...unsubmitted] };
+    const rec = { date, time: captureTime, misses: [...unsubmitted] };
     setLocalRecords(r => [rec, ...r]);
     onArchive?.(rec);
     setTimeout(() => setSheetOpen(false), 700);
@@ -299,17 +280,8 @@ export const PhoneInspectionApp: React.FC<Props> = ({
         {view === 'inspection' && (
           <>
             <header style={{ padding: 'clamp(34px,7vw,52px) 6px clamp(22px,4vw,30px)', animation: `pcRise .6s ${T.ease} .05s both` }}>
-              <div style={{ fontSize: 'clamp(14px,3.6vw,15px)', fontWeight: 500, color: T.ink3 }}>
-                {dateLabel}
-                {isToday && (
-                  <>
-                    {' · '}
-                    <span style={{ fontVariantNumeric: 'tabular-nums', color: T.ink2 }}>{captureTime}</span>
-                    <span style={{ fontSize: 'clamp(12px,3vw,13px)', color: T.ink4 }}>（记录时间）</span>
-                  </>
-                )}
-              </div>
-              <h1 style={{ margin: '8px 0 0', fontSize: 'clamp(32px,8.6vw,46px)', lineHeight: 1.08, fontWeight: 700, letterSpacing: '-1.4px' }}>{slot.name}点验</h1>
+              <div style={{ fontSize: 'clamp(14px,3.6vw,15px)', fontWeight: 500, color: T.ink3 }}>{dateLabel}</div>
+              <h1 style={{ margin: '8px 0 0', fontSize: 'clamp(32px,8.6vw,46px)', lineHeight: 1.08, fontWeight: 700, letterSpacing: '-1.4px', fontVariantNumeric: 'tabular-nums' }}>{isToday ? `${captureTime} 点验` : '补录点验'}</h1>
               <p style={{ margin: '12px 0 0', fontSize: 'clamp(16px,4.2vw,19px)', lineHeight: 1.5, color: T.ink2, maxWidth: 620, textWrap: 'pretty' as any }}>
                 {list.length === 0
                   ? `全部 ${total} 位同学的手机均已入箱，可直接生成通报。`
@@ -317,22 +289,16 @@ export const PhoneInspectionApp: React.FC<Props> = ({
               </p>
             </header>
 
-            {/* 时段 + 日期 */}
-            <div style={{ display: 'flex', gap: mob ? 8 : 10, flexWrap: mob ? 'nowrap' : 'wrap', overflowX: mob ? 'auto' : 'visible', padding: mob ? '0 6px 22px' : '0 6px 26px', animation: `pcRise .6s ${T.ease} .1s both` }}>
-              {SLOTS.map(s => {
-                const on = s.id === slotId;
-                return (
-                  <button key={s.id} onClick={() => { setSlotId(s.id); setSlotPinned(true); setEdited(null); }}
-                    style={{ display: 'inline-flex', alignItems: 'baseline', gap: 8, flexShrink: 0, padding: mob ? '11px 16px' : '11px 20px', border: 'none', borderRadius: 18, cursor: 'pointer', fontSize: 15, fontWeight: on ? 600 : 500, background: on ? T.accent : 'rgba(255,255,255,0.6)', color: on ? '#fff' : 'rgba(60,60,67,0.8)', backdropFilter: 'blur(20px) saturate(180%)', WebkitBackdropFilter: 'blur(20px) saturate(180%)', boxShadow: on ? `0 8px 22px ${T.accent}40` : '0 6px 18px rgba(0,0,0,0.05)', transition: `all .25s ${T.ease}` }}>
-                    <span>{s.name}</span>
-                    {on && isToday && (
-                      <span style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums', color: 'rgba(255,255,255,0.72)' }}>{captureTime}</span>
-                    )}
-                  </button>
-                );
-              })}
+            {/* 日期 */}
+            <div style={{ display: 'flex', gap: mob ? 8 : 10, flexWrap: 'wrap', padding: mob ? '0 6px 22px' : '0 6px 26px', animation: `pcRise .6s ${T.ease} .1s both` }}>
               <input type="date" value={date} onChange={e => { setDate(e.target.value); setEdited(null); }}
-                style={{ marginLeft: mob ? 0 : 'auto', flexShrink: 0, padding: mob ? '10px 14px' : '11px 16px', border: 'none', borderRadius: 18, ...glass(0.6), boxShadow: '0 6px 18px rgba(0,0,0,0.05)', fontSize: 15, color: 'rgba(60,60,67,0.75)' }} />
+                style={{ flexShrink: 0, padding: mob ? '10px 14px' : '11px 16px', border: 'none', borderRadius: 18, ...glass(0.6), boxShadow: '0 6px 18px rgba(0,0,0,0.05)', fontSize: 15, color: 'rgba(60,60,67,0.75)' }} />
+              {!isToday && (
+                <button onClick={() => { setDate(isoOf(new Date())); setEdited(null); }}
+                  style={{ flexShrink: 0, padding: mob ? '10px 14px' : '11px 16px', border: 'none', borderRadius: 18, background: 'rgba(255,255,255,0.6)', color: T.accent, fontSize: 15, fontWeight: 500, cursor: 'pointer', boxShadow: '0 6px 18px rgba(0,0,0,0.05)' }}>
+                  回到今天
+                </button>
+              )}
             </div>
 
             {/* 柜位：每层固定 9 槽 */}
@@ -428,7 +394,7 @@ export const PhoneInspectionApp: React.FC<Props> = ({
                 {records.slice(0, 8).map((r, i) => (
                   <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '14px 18px' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 0 }}>
-                      <span style={{ fontSize: 17, fontWeight: 500, letterSpacing: '-0.3px' }}>{r.date} · {r.slot}{r.time ? ` ${r.time}` : ''}</span>
+                      <span style={{ fontSize: 17, fontWeight: 500, letterSpacing: '-0.3px' }}>{r.date}{r.time || r.slot ? ` · ${r.time || r.slot}` : ''}</span>
                       <span style={{ fontSize: 13, color: T.ink3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {r.misses.length ? r.misses.map(id => students.find(s => s.id === id)?.name).join('、') : '全员按规定存放'}
                       </span>
@@ -452,7 +418,7 @@ export const PhoneInspectionApp: React.FC<Props> = ({
               <span style={{ fontSize: 17, fontWeight: 600, letterSpacing: '-0.3px', color: list.length ? T.red : T.greenInk }}>
                 {list.length === 0 ? '全员齐备' : `${list.length} 人未存`}
               </span>
-              <span style={{ fontSize: 12, color: T.ink3 }}>{slot.name} · {((sub / (total || 1)) * 100).toFixed(1)}% 合规</span>
+              <span style={{ fontSize: 12, color: T.ink3 }}>{captureTime ? `${captureTime} · ` : ''}{((sub / (total || 1)) * 100).toFixed(1)}% 合规</span>
             </div>
             <button onClick={() => setSheetOpen(true)}
               style={{ padding: mob ? '14px 20px' : '14px 26px', border: 'none', borderRadius: 22, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0, minHeight: 48, fontSize: 16, fontWeight: 600, color: '#fff', background: T.accent, boxShadow: `0 10px 26px ${T.accent}4d`, transition: `all .22s ${T.ease}` }}>
@@ -471,7 +437,7 @@ export const PhoneInspectionApp: React.FC<Props> = ({
               <div>
                 <h2 style={{ margin: 0, fontSize: 'clamp(24px,6vw,28px)', fontWeight: 700, letterSpacing: '-0.9px' }}>通报</h2>
                 <p style={{ margin: '6px 0 0', fontSize: 15, color: 'rgba(60,60,67,0.55)' }}>
-                  {date} · {slot.name}{captureTime ? ` ${captureTime}` : ''} · {list.length ? `未存 ${list.length} 人` : '全员齐备'}
+                  {date}{captureTime ? ` ${captureTime}` : ''} · {list.length ? `未存 ${list.length} 人` : '全员齐备'}
                 </p>
               </div>
               <button onClick={() => setSheetOpen(false)} aria-label="关闭" style={{ width: 34, height: 34, border: 'none', borderRadius: 99, background: 'rgba(120,120,128,0.14)', color: 'rgba(60,60,67,0.6)', fontSize: 17, cursor: 'pointer', flexShrink: 0 }}>×</button>

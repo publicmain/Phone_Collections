@@ -28,7 +28,7 @@ export default function App() {
           id: `rec-${Date.now()}`,
           date: rec.date,
           timeSlot: 'custom',
-          timeSlotLabel: rec.slot,
+          timeSlotLabel: rec.time,   // 点验当下的真实时刻 HH:MM
           totalStudents: students.length,
           submittedCount: students.length - rec.misses.length,
           unsubmittedCount: rec.misses.length,
