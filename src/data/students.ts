@@ -3,7 +3,7 @@ import { Student } from '../types';
 export const INITIAL_STUDENTS: Student[] = [
   { id: 1, code: '01', name: '蒋安祁', pinyinOrEn: 'Jiang Anqi', chineseName: '蒋安祁', phoneStored: false },
   { id: 2, code: '02', name: '赵一鸣', pinyinOrEn: 'Zhao Yiming', chineseName: '赵一鸣', phoneStored: false },
-  { id: 3, code: '03', name: '曾义洋', pinyinOrEn: 'Zeng Yiyang', chineseName: '曾义洋', phoneStored: false },
+  { id: 3, code: '03', name: '周梓昕', pinyinOrEn: 'Zhou Zixin', chineseName: '周梓昕', phoneStored: false },
   { id: 4, code: '04', name: '赵伯荣', pinyinOrEn: 'Zhao Borong', chineseName: '赵伯荣', phoneStored: false },
   { id: 5, code: '05', name: '叶文轩', pinyinOrEn: 'Ye Wenxuan', chineseName: '叶文轩', phoneStored: false },
   { id: 6, code: '06', name: '胡齐家', pinyinOrEn: 'Hu Qijia', chineseName: '胡齐家', phoneStored: false },
@@ -33,6 +33,10 @@ export const INITIAL_STUDENTS: Student[] = [
   { id: 30, code: '30', name: '李永轩', pinyinOrEn: 'Li Yongxuan', chineseName: '李永轩', phoneStored: false },
   { id: 31, code: '31', name: '范恩慧', pinyinOrEn: 'Fan Enhui', chineseName: '范恩慧', phoneStored: false },
   { id: 32, code: '32', name: '孔凡兮', pinyinOrEn: 'Kong Fanxi', chineseName: '孔凡兮', phoneStored: false },
-  { id: 33, code: '33', name: '刘钇村', pinyinOrEn: 'Liu Yicun', chineseName: '刘钇村', phoneStored: false },
+  { id: 33, code: '33', name: '蒋昕雨', pinyinOrEn: 'Jiang Xinyu', chineseName: '蒋昕雨', phoneStored: false },
   { id: 34, code: '34', name: '刘亦佳', pinyinOrEn: 'Liu Yijia', chineseName: '刘亦佳', phoneStored: false },
+  { id: 35, code: '35', name: '牛子源', pinyinOrEn: 'Niu Ziyuan', chineseName: '牛子源', phoneStored: false },
+  { id: 36, code: '36', name: '曹展嘉', pinyinOrEn: 'Cao Zhanjia', chineseName: '曹展嘉', phoneStored: false },
+  { id: 37, code: '37', name: '白谨诚', pinyinOrEn: 'Bai Jincheng', chineseName: '白谨诚', phoneStored: false },
+  { id: 38, code: '38', name: '李廷钧', pinyinOrEn: 'Li Tingjun', chineseName: '李廷钧', phoneStored: false },
 ];
