@@ -55,7 +55,7 @@ const glass = (a: number): React.CSSProperties => ({
   backdropFilter: 'blur(28px) saturate(180%)',
   WebkitBackdropFilter: 'blur(28px) saturate(180%)',
 });
-const PER_LAYER = 9;               // 每层固定 9 个槽位，对应实体柜
+const PER_LAYER = 8;               // 每层固定 8 个槽位，对应实体柜
 const MOBILE = 700;                // 断点
 const MIN_TARGET = 44;             // 最小触控目标（iOS HIG 44pt）
 const RESUME_WINDOW_MIN = 120;     // 超过这么久没动，再打开就当新一轮点验
@@ -164,8 +164,8 @@ export const PhoneInspectionApp: React.FC<Props> = ({
 
   const gap = mob ? (narrow ? 5 : 6) : 11;
 
-  // 一层 9 格铺在手机上只有 32px 宽，低于 44px 的最小触控目标，必然误点。
-  // 因此手机上把一层折成两行显示（1–5 / 6–9），层的分组与编号不变。
+  // 一层 8 格铺在手机上只有 37px 宽，低于 44px 的最小触控目标，必然误点。
+  // 因此手机上把一层折成两行显示（1–4 / 5–8），层的分组与编号不变。
   const widthAt = (cols: number) =>
     Math.floor((Math.min(vw, MOBILE) - 32 - 12 - gap * (cols - 1)) / cols);
 
@@ -301,7 +301,7 @@ export const PhoneInspectionApp: React.FC<Props> = ({
               )}
             </div>
 
-            {/* 柜位：每层固定 9 槽 */}
+            {/* 柜位：每层固定 8 槽 */}
             <section style={{ padding: '0 6px', animation: `pcRise .6s ${T.ease} .15s both` }}>
               <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 16, padding: '0 4px 14px' }}>
                 <h2 style={{ margin: 0, fontSize: 22, fontWeight: 600, letterSpacing: '-0.5px' }}>柜位</h2>
